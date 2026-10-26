@@ -28,14 +28,16 @@ class Artifact:
         self.browser = self.client.chromium.launch(headless=self.headless)
         return True
 
-    def newPage(self, link: Optional[str] = None) -> bool:
-        """新增一個頁面"""
+    def initiatePage(self, link: Optional[str] = None) -> bool:
+        """初始頁面"""
 
         # self.page = self.browser.new_page()
         context = self.browser.new_context()
-        context.add_init_script('Object.defineProperty(navigator, "webdriver", {get: () => false})')
+        context.add_init_script(
+            'Object.defineProperty(navigator, "webdriver", {get: () => false})'
+        )
         self.page = context.new_page()
-        if link is not None: self.page.goto(link, wait_until='networkidle', timeout=60000)
+        if link is not None: self.page.goto(link)
         return True
 
     def savePage(self, path: str) -> bool:
@@ -50,8 +52,8 @@ class Artifact:
         _ = content
         return True
 
-    def deletePage(self) -> bool:
-        """刪除頁面"""
+    def terminatePage(self) -> bool:
+        """終止頁面"""
 
         self.page.close()
         return True
@@ -77,19 +79,20 @@ class Artifact:
     ) -> bool:
         """"""
 
-        node = self.page.get_by_role("tab", name=title, exact=True)
-        node.click()
+        print(title, city, town, date)
+        self.page.get_by_role("tab", name=title, exact=True) # 選擇 title
+        self.page.locator("#p_city").select_option(label=city) # 選擇 city
+        self.page.locator("#p_town option").nth(1).wait_for(state="attached") # 等 towns 選項載入
+        self.page.locator("#p_town").select_option(label=town) # 選擇 towns
 
-        self.page.locator("#p_city").select_option(label=city)
-        self.page.locator("#p_town option").nth(1).wait_for(state="attached")   # 等選項載入
-        self.page.locator("#p_town").select_option(label=town)
-
+        # 預設都打勾
         boxes = self.page.locator('input[name="ptype"]:visible').all()
         for box in boxes:
             if box.is_checked():
                 continue
             box.check(force=True)
 
+        # 選擇搜索時間
         beginning = date['beginning'].split('-')
         ending = date['ending'].split('-')
         self.page.locator("#p_startY").select_option(label=beginning[0])
@@ -97,21 +100,26 @@ class Artifact:
         self.page.locator("#p_endY").select_option(label=ending[0])
         self.page.locator("#p_endM").select_option(label=ending[1])
 
-        getItem = lambda response: "/SERVICE/QueryPrice/" in response.url
-        with self.page.expect_response(getItem, timeout=60000) as response:
+        # 
+        path = "/SERVICE/QueryPrice/"
+        getResponse = lambda x: path in getattr(x, 'url')
+        with self.page.expect_response(getResponse) as response:
             self.page.locator("a.btn.btn-a.form-button:visible").click()
             pass
-
-        items = response.value.json()  # basic information here
-        self.page.wait_for_url("**/list.jsp", timeout=60000)
+        items = response.value.json() # 擷取搜索資料的封包
+        length = len(items)
+        print(f'資料筆數：{length}')
 
         loading = self.page.locator(".blockUI.blockMsg")
         try:
-            loading.wait_for(state="visible", timeout=5000)  # 等出現，超過就放棄
-            loading.wait_for(state="hidden", timeout=10000)  # 出現了，就等它消失
-        except:
-            loading.wait_for(state="hidden", timeout=10000)  # 假裝出現，就等它消失
+            print("等待<載入中>的畫面跳出")
+            loading.wait_for(state="visible", timeout=5000)
             pass
+        except:
+            print("等待<載入中>的畫面逾時沒有跳出")
+            pass
+        print(f'檢查<載入中>的畫面是否隱藏')
+        loading.wait_for(state="hidden", timeout=10000)
 
         self.data = {
             'title': title,
@@ -139,205 +147,205 @@ class Artifact:
             json.dump(items, paper, ensure_ascii=False)
             pass
 
-        _ = path
+        _ = paper
         return True
 
-    # def pullData(self) -> bool:
-    #     """"""
+    def pullTransactions(self) -> bool:
+        """"""
 
-    #     folder = os.path.join(
-    #         self.checkpoint,
-    #         self.data['title'],
-    #         self.data['city'],
-    #         self.data['town']
-    #     )
-    #     os.makedirs(folder, exist_ok=True)
+        information = self.page.locator('#price_table_info').inner_text()
+        length = int(
+            re.search(
+                r'查詢結果 : ([\d,]+) 筆',
+                information
+            ).group(1).replace(',', '')
+        )
+        assert length == len(self.data['items'])
 
-    #     items = self.data['items']
-    #     path = os.path.join(folder, 'items.json')
-    #     with open(path, "w", encoding="utf-8") as paper:
-    #         json.dump(items, paper, ensure_ascii=False)
-    #         pass
+        getDetail = lambda x: "/QueryPrice/detail/" in getattr(x, 'url')
+        getHistory = lambda x: "/QueryPrice/history/" in getattr(x, 'url')
 
-    #     information = self.page.locator('#price_table_info')
-    #     length = int(
-    #         re.search(
-    #             r'查詢結果 : ([\d,]+) 筆',
-    #             information.inner_text()
-    #         ).group(1).replace(',', '')
-    #     )
-    #     keep = self.page.locator('#price_table_next')
-    #     modal = self.page.locator('#detailModalCenter')
-    #     getDetail = lambda response: "/QueryPrice/detail/" in response.url
-    #     getHistory = lambda response: "/QueryPrice/history/" in response.url
+        keep = self.page.locator('#price_table_next')
+        modal = self.page.locator('#detailModalCenter')
+        loading = self.page.locator(".blockUI.blockMsg")
+        transactions = {}
+        while True:
 
-    #     loading = self.page.locator(".blockUI.blockMsg")
+            # 逐一點選獲取明細跟歷次
+            rows = self.page.locator('#table-item-tbody > tr[role="row"]')
+            for row in rows.all():
+                # 展開列，明細按鈕才看得到
+                row.locator('td.details-control').click()
+                child = row.locator('xpath=following-sibling::tr[1]')
+                # 獲得明細
+                with self.page.expect_response(getDetail) as detail: 
+                    # 獲得歷次
+                    with self.page.expect_response(getHistory) as history: # 
+                        child.locator('button.detail').click()
+                        pass
+                    history = history.value.json()
+                    pass
+                detail = detail.value.json()
+                # 對應 items 裡的 id
+                identity = row.locator('a.a_link').get_attribute('id')
+                transactions[identity] = {
+                    'detail': detail,
+                    'history': history
+                }
+                loading.wait_for(state="hidden", timeout=10000)  # 等載入中消失
+                modal.locator('button.close').click()
+                modal.wait_for(state="hidden", timeout=10000)
+                row.locator('td.details-control').click()
+                print(f"{len(transactions)}/{length}", end='\r')
+                continue
 
-    #     transaction = {}
-    #     while True:
-    #         # 逐一點獲取明細跟歷次
-    #         rows = self.page.locator('#table-item-tbody > tr[role="row"]')
-    #         for row in rows.all():
-    #             # 展開列，明細按鈕才看得到
-    #             row.locator('td.details-control').click()
-    #             child = row.locator('xpath=following-sibling::tr[1]')
-    #             with self.page.expect_response(getDetail) as detail: # 明細
-    #                 with self.page.expect_response(getHistory) as history: # 歷次
-    #                     child.locator('button.detail').click()
-    #                     pass
-    #                 history = history.value.json()
-    #                 pass
+            print(f"{len(transactions)}/{length}", end='\r')
+            if 'disabled' in keep.get_attribute('class'):
+                print(f"{len(transactions)}/{length}")
+                print(f"已經是最後一頁")
+                break
 
-    #             detail = detail.value.json()
-    #             # 對應 items 裡的 id
-    #             identity = row.locator('a.a_link').get_attribute('id')
-    #             transaction[identity] = {
-    #                 'detail': detail,
-    #                 'history': history
-    #             }
+            before = information
+            keep.locator('a').click()
+            # 等「顯示」改變，才算換頁完成
+            query = "document.querySelector('#price_table_info')"
+            self.page.wait_for_function(
+                f"b => {query}.innerText !== b",
+                arg=before, 
+                timeout=30000
+            )
+            continue
 
-    #             loading.wait_for(state="hidden", timeout=10000)  # 等載入中消失
-    #             modal.locator('button.close').click()
-    #             modal.wait_for(state="hidden", timeout=10000)
-    #             row.locator('td.details-control').click()  # 收合列
-    #             continue
+        folder = os.path.join(
+            self.checkpoint,
+            self.data['title'],
+            self.data['city'],
+            self.data['town']
+        )
+        os.makedirs(folder, exist_ok=True)
+        path = os.path.join(folder, 'transactions.json')
+        with open(path, "w", encoding="utf-8") as paper:
+            json.dump(transactions, paper, ensure_ascii=False)
+            pass
 
-    #         print(f"{len(transaction)}/{length}", end='\r')
-    #         if 'disabled' in keep.get_attribute('class'):
-    #             break # 下一頁不能點了，就是最後一頁
-    #         before = information.inner_text()
-    #         keep.locator('a').click()
-    #         # 等「顯示」改變，才算換頁完成
-    #         self.page.wait_for_function(
-    #             "b => document.querySelector('#price_table_info').innerText !== b",
-    #             arg=before, timeout=30000
-    #         )
-    #         continue
-
-    #     path = os.path.join(folder, 'transaction.json')
-    #     with open(path, "w", encoding="utf-8") as paper:
-    #         json.dump(transaction, paper, ensure_ascii=False)
-    #         pass
-
-    #     return True
-
+        _ = paper
+        return True
     pass
 
 if '__main__'==__name__:
 
     title = '買賣查詢'
-    # 基隆 台北 已經完成，剩餘的尚未完成
     cities = {
         '基隆市': [
             '七堵區', '中山區', '中正區', '仁愛區', '安樂區', '信義區', '暖暖區'
         ],
-        '臺北市': [
-            '士林區', '大同區', '大安區', '中山區', '中正區', '內湖區', '文山區', '北投區', '松山區', '信義區', '南港區', '萬華區'
-        ],
-        '新北市': [
-            '八里區', '三芝區', '三重區', '三峽區', '土城區', '中和區', '五股區', '平溪區', '永和區', '石門區', '石碇區', '汐止區',
-            '坪林區', '林口區', '板橋區', '金山區', '泰山區', '烏來區', '貢寮區', '淡水區', '深坑區', '新店區', '新莊區', '瑞芳區',
-            '萬里區', '樹林區', '雙溪區', '蘆洲區', '鶯歌區'
-        ],
-        '桃園市': [
-            '八德區', '大園區', '大溪區', '中壢區', '平鎮區', '桃園區', '復興區', '新屋區', '楊梅區', '龍潭區', '龜山區', '蘆竹區',
-            '觀音區'
-        ],
-        '新竹市': [
-            '新竹市'
-        ],
-        '新竹縣': [
-            '五峰鄉', '北埔鄉', '尖石鄉', '竹北市', '竹東鎮', '峨眉鄉', '湖口鄉', '新埔鎮', '新豐鄉', '橫山鄉', '關西鎮', '寶山鄉',
-            '芎林鄉'
-        ],
-        '苗栗縣': [
-            '三義鄉', '三灣鄉', '大湖鄉', '公館鄉', '竹南鎮', '西湖鄉', '卓蘭鎮', '南庄鄉', '後龍鎮', '苗栗市', '苑裡鎮', '泰安鄉',
-            '通霄鎮', '造橋鄉', '獅潭鄉', '銅鑼鄉', '頭份市', '頭屋鄉'
-        ],
-        '臺中市': [
-            '大甲區', '大安區', '大肚區', '大里區', '大雅區', '中區', '太平區', '北屯區', '北區', '外埔區', '石岡區', '后里區',
-            '西屯區', '西區', '沙鹿區', '和平區', '東區', '東勢區', '南屯區', '南區', '烏日區', '神岡區', '梧棲區', '清水區',
-            '新社區', '潭子區', '龍井區', '豐原區', '霧峰區'
-        ],
-        '南投縣': [
-            '中寮鄉', '仁愛鄉', '水里鄉', '名間鄉', '竹山鎮', '信義鄉', '南投市', '埔里鎮', '草屯鎮', '國姓鄉', '魚池鄉', '鹿谷鄉',
-            '集集鎮'
-        ],
-        '彰化縣': [
-            '二水鄉', '二林鎮', '大村鄉', '大城鄉', '北斗鎮', '永靖鄉', '田中鎮', '田尾鄉', '竹塘鄉', '伸港鄉', '秀水鄉', '和美鎮',
-            '社頭鄉', '芳苑鄉', '花壇鄉', '芬園鄉', '員林市', '埔心鄉', '埔鹽鄉', '埤頭鄉', '鹿港鎮', '溪州鄉', '溪湖鎮', '彰化市',
-            '福興鄉', '線西鄉'
-        ],
-        '雲林縣': [
-            '二崙鄉', '口湖鄉', '土庫鎮', '大埤鄉', '元長鄉', '斗六市', '斗南鎮', '水林鄉', '北港鎮', '古坑鄉', '台西鄉', '四湖鄉',
-            '西螺鎮', '東勢鄉', '林內鄉', '虎尾鎮', '崙背鄉', '麥寮鄉', '褒忠鄉', '莿桐鄉'
-        ],
-        '嘉義市': [
-            '嘉義市'
-        ],
-        '嘉義縣': [
-            '大林鎮', '大埔鄉', '中埔鄉', '六腳鄉', '太保市', '水上鄉', '布袋鎮', '民雄鄉', '朴子市', '竹崎鄉', '東石鄉', '阿里山鄉',
-            '梅山鄉', '鹿草鄉', '番路鄉', '新港鄉', '溪口鄉', '義竹鄉'
-        ],
-        '臺南市': [
-            '七股區', '下營區', '大內區', '山上區', '中西區', '仁德區', '六甲區', '北門區', '北區', '左鎮區', '永康區', '玉井區',
-            '白河區', '安平區', '安定區', '安南區', '西港區', '佳里區', '官田區', '東山區', '東區', '南化區', '南區', '後壁區',
-            '柳營區', '將軍區', '麻豆區', '善化區', '新化區', '新市區', '新營區', '楠西區', '學甲區', '龍崎區', '歸仁區', '關廟區',
-            '鹽水區'
-        ],
-        '高雄市': [
-            '三民區', '大社區', '大寮區', '大樹區', '小港區', '仁武區', '內門區', '六龜區', '左營區', '永安區', '田寮區', '甲仙區',
-            '杉林區', '那瑪夏區', '岡山區', '林園區', '阿蓮區', '前金區', '前鎮區', '美濃區', '茄萣區', '茂林區', '苓雅區', '桃源區',
-            '梓官區', '鳥松區', '湖內區', '新興區', '楠梓區', '路竹區', '鼓山區', '旗山區', '旗津區', '鳳山區', '橋頭區', '燕巢區',
-            '彌陀區', '鹽埕區'
-        ],
-        '屏東縣': [
-            '九如鄉', '三地門鄉', '內埔鄉', '竹田鄉', '牡丹鄉', '車城鄉', '里港鄉', '佳冬鄉', '來義鄉', '枋山鄉', '枋寮鄉', '東港鎮',
-            '林邊鄉', '長治鄉', '南州鄉', '屏東市', '恆春鎮', '春日鄉', '崁頂鄉', '泰武鄉', '琉球鄉', '高樹鄉', '新埤鄉', '新園鄉',
-            '獅子鄉', '萬丹鄉', '萬巒鄉', '滿州鄉', '瑪家鄉', '潮州鎮', '霧臺鄉', '麟洛鄉', '鹽埔鄉'
-        ],
-        '宜蘭縣': [
-            '三星鄉', '大同鄉', '五結鄉', '冬山鄉', '壯圍鄉', '宜蘭市', '南澳鄉', '員山鄉', '頭城鎮', '礁溪鄉', '羅東鎮', '蘇澳鎮'
-        ],
-        '花蓮縣': [
-            '玉里鎮', '光復鄉', '吉安鄉', '秀林鄉', '卓溪鄉', '花蓮市', '富里鄉', '新城鄉', '瑞穗鄉', '萬榮鄉', '壽豐鄉', '鳳林鎮',
-            '豐濱鄉'
-        ],
-        '臺東縣': [
-            '大武鄉', '太麻里鄉', '台東市', '成功鎮', '池上鄉', '卑南鄉', '延平鄉', '東河鄉', '金峰鄉', '長濱鄉', '海端鄉', '鹿野鄉',
-            '達仁鄉', '綠島鄉', '關山鎮', '蘭嶼鄉'
-        ],
-        '澎湖縣': [
-            '七美鄉', '白沙鄉', '西嶼鄉', '馬公市', '望安鄉', '湖西鄉'
-        ],
-        '金門縣': [
-            '金沙鎮', '金城鎮', '金湖鎮', '金寧鄉', '烈嶼鄉', '烏坵鄉'
-        ],
-        '連江縣': [
-            '北竿鄉', '東引鄉', '南竿鄉', '莒光鄉'
-        ],
+        # '臺北市': [
+        #     '士林區', '大同區', '大安區', '中山區', '中正區', '內湖區', '文山區', '北投區', '松山區', '信義區', '南港區', '萬華區'
+        # ],
+        # '新北市': [
+        #     '八里區', '三芝區', '三重區', '三峽區', '土城區', '中和區', '五股區', '平溪區', '永和區', '石門區', '石碇區', '汐止區',
+        #     '坪林區', '林口區', '板橋區', '金山區', '泰山區', '烏來區', '貢寮區', '淡水區', '深坑區', '新店區', '新莊區', '瑞芳區',
+        #     '萬里區', '樹林區', '雙溪區', '蘆洲區', '鶯歌區'
+        # ],
+        # '桃園市': [
+        #     '八德區', '大園區', '大溪區', '中壢區', '平鎮區', '桃園區', '復興區', '新屋區', '楊梅區', '龍潭區', '龜山區', '蘆竹區',
+        #     '觀音區'
+        # ],
+        # '新竹市': [
+        #     '新竹市'
+        # ],
+        # '新竹縣': [
+        #     '五峰鄉', '北埔鄉', '尖石鄉', '竹北市', '竹東鎮', '峨眉鄉', '湖口鄉', '新埔鎮', '新豐鄉', '橫山鄉', '關西鎮', '寶山鄉',
+        #     '芎林鄉'
+        # ],
+        # '苗栗縣': [
+        #     '三義鄉', '三灣鄉', '大湖鄉', '公館鄉', '竹南鎮', '西湖鄉', '卓蘭鎮', '南庄鄉', '後龍鎮', '苗栗市', '苑裡鎮', '泰安鄉',
+        #     '通霄鎮', '造橋鄉', '獅潭鄉', '銅鑼鄉', '頭份市', '頭屋鄉'
+        # ],
+        # '臺中市': [
+        #     '大甲區', '大安區', '大肚區', '大里區', '大雅區', '中區', '太平區', '北屯區', '北區', '外埔區', '石岡區', '后里區',
+        #     '西屯區', '西區', '沙鹿區', '和平區', '東區', '東勢區', '南屯區', '南區', '烏日區', '神岡區', '梧棲區', '清水區',
+        #     '新社區', '潭子區', '龍井區', '豐原區', '霧峰區'
+        # ],
+        # '南投縣': [
+        #     '中寮鄉', '仁愛鄉', '水里鄉', '名間鄉', '竹山鎮', '信義鄉', '南投市', '埔里鎮', '草屯鎮', '國姓鄉', '魚池鄉', '鹿谷鄉',
+        #     '集集鎮'
+        # ],
+        # '彰化縣': [
+        #     '二水鄉', '二林鎮', '大村鄉', '大城鄉', '北斗鎮', '永靖鄉', '田中鎮', '田尾鄉', '竹塘鄉', '伸港鄉', '秀水鄉', '和美鎮',
+        #     '社頭鄉', '芳苑鄉', '花壇鄉', '芬園鄉', '員林市', '埔心鄉', '埔鹽鄉', '埤頭鄉', '鹿港鎮', '溪州鄉', '溪湖鎮', '彰化市',
+        #     '福興鄉', '線西鄉'
+        # ],
+        # '雲林縣': [
+        #     '二崙鄉', '口湖鄉', '土庫鎮', '大埤鄉', '元長鄉', '斗六市', '斗南鎮', '水林鄉', '北港鎮', '古坑鄉', '台西鄉', '四湖鄉',
+        #     '西螺鎮', '東勢鄉', '林內鄉', '虎尾鎮', '崙背鄉', '麥寮鄉', '褒忠鄉', '莿桐鄉'
+        # ],
+        # '嘉義市': [
+        #     '嘉義市'
+        # ],
+        # '嘉義縣': [
+        #     '大林鎮', '大埔鄉', '中埔鄉', '六腳鄉', '太保市', '水上鄉', '布袋鎮', '民雄鄉', '朴子市', '竹崎鄉', '東石鄉', '阿里山鄉',
+        #     '梅山鄉', '鹿草鄉', '番路鄉', '新港鄉', '溪口鄉', '義竹鄉'
+        # ],
+        # '臺南市': [
+        #     '七股區', '下營區', '大內區', '山上區', '中西區', '仁德區', '六甲區', '北門區', '北區', '左鎮區', '永康區', '玉井區',
+        #     '白河區', '安平區', '安定區', '安南區', '西港區', '佳里區', '官田區', '東山區', '東區', '南化區', '南區', '後壁區',
+        #     '柳營區', '將軍區', '麻豆區', '善化區', '新化區', '新市區', '新營區', '楠西區', '學甲區', '龍崎區', '歸仁區', '關廟區',
+        #     '鹽水區'
+        # ],
+        # '高雄市': [
+        #     '三民區', '大社區', '大寮區', '大樹區', '小港區', '仁武區', '內門區', '六龜區', '左營區', '永安區', '田寮區', '甲仙區',
+        #     '杉林區', '那瑪夏區', '岡山區', '林園區', '阿蓮區', '前金區', '前鎮區', '美濃區', '茄萣區', '茂林區', '苓雅區', '桃源區',
+        #     '梓官區', '鳥松區', '湖內區', '新興區', '楠梓區', '路竹區', '鼓山區', '旗山區', '旗津區', '鳳山區', '橋頭區', '燕巢區',
+        #     '彌陀區', '鹽埕區'
+        # ],
+        # '屏東縣': [
+        #     '九如鄉', '三地門鄉', '內埔鄉', '竹田鄉', '牡丹鄉', '車城鄉', '里港鄉', '佳冬鄉', '來義鄉', '枋山鄉', '枋寮鄉', '東港鎮',
+        #     '林邊鄉', '長治鄉', '南州鄉', '屏東市', '恆春鎮', '春日鄉', '崁頂鄉', '泰武鄉', '琉球鄉', '高樹鄉', '新埤鄉', '新園鄉',
+        #     '獅子鄉', '萬丹鄉', '萬巒鄉', '滿州鄉', '瑪家鄉', '潮州鎮', '霧臺鄉', '麟洛鄉', '鹽埔鄉'
+        # ],
+        # '宜蘭縣': [
+        #     '三星鄉', '大同鄉', '五結鄉', '冬山鄉', '壯圍鄉', '宜蘭市', '南澳鄉', '員山鄉', '頭城鎮', '礁溪鄉', '羅東鎮', '蘇澳鎮'
+        # ],
+        # '花蓮縣': [
+        #     '玉里鎮', '光復鄉', '吉安鄉', '秀林鄉', '卓溪鄉', '花蓮市', '富里鄉', '新城鄉', '瑞穗鄉', '萬榮鄉', '壽豐鄉', '鳳林鎮',
+        #     '豐濱鄉'
+        # ],
+        # '臺東縣': [
+        #     '大武鄉', '太麻里鄉', '台東市', '成功鎮', '池上鄉', '卑南鄉', '延平鄉', '東河鄉', '金峰鄉', '長濱鄉', '海端鄉', '鹿野鄉',
+        #     '達仁鄉', '綠島鄉', '關山鎮', '蘭嶼鄉'
+        # ],
+        # '澎湖縣': [
+        #     '七美鄉', '白沙鄉', '西嶼鄉', '馬公市', '望安鄉', '湖西鄉'
+        # ],
+        # '金門縣': [
+        #     '金沙鎮', '金城鎮', '金湖鎮', '金寧鄉', '烈嶼鄉', '烏坵鄉'
+        # ],
+        # '連江縣': [
+        #     '北竿鄉', '東引鄉', '南竿鄉', '莒光鄉'
+        # ],
     }
     for city in cities:
         for town in cities[city]:
             link = variables.get("ROOT_PAGE")
-            checkpoint = '.cache/101_1-101_12'
-            headless = True
+            checkpoint = '.cache/115_1-115_12'
+            headless = False
             artifact = Artifact(headless, checkpoint)
             artifact.startClient()
             artifact.openBrowser()                                                                                                                             
-            artifact.newPage(link)
-            print(town)
+            artifact.initiatePage(link)
             artifact.searchData(
                 title=title,
                 city=city,
                 town=town,
                 date={
-                    'beginning': '101-1',
-                    'ending': '101-12'
+                    'beginning': '115-1',
+                    'ending': '115-12'
                 }
             )
             artifact.pullItems()
-            artifact.deletePage()
+            artifact.pullTransactions()
+            artifact.terminatePage()
             artifact.closeBrowser()
             artifact.stopClient()
             continue
