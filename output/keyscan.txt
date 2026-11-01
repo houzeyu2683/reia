@@ -1,0 +1,4 @@
+  File "<string>", line 5
+    period=f.replace('\','/').split('/')[1]
+                                      ^
+SyntaxError: unterminated string literal (detected at line 5)

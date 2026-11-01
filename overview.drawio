@@ -1,0 +1,49 @@
+<mxfile host="65bd71144e">
+    <diagram id="PwHO48xuOw5kFV1WH4PB" name="Page-1">
+        <mxGraphModel dx="712" dy="775" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="0VbNO4eZH2wrhs1lxZlZ-1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;roundedPerimeter=1;" value="政府&lt;div&gt;實價登入網站&lt;/div&gt;" vertex="1">
+                    <mxGeometry height="60" width="120" x="305" y="300" as="geometry"/>
+                </mxCell>
+                <mxCell id="0VbNO4eZH2wrhs1lxZlZ-2" parent="1" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;" value="JSON&lt;div&gt;檔案&lt;/div&gt;" vertex="1">
+                    <mxGeometry height="100" width="80" x="140" y="430" as="geometry"/>
+                </mxCell>
+                <mxCell id="0VbNO4eZH2wrhs1lxZlZ-3" parent="1" style="whiteSpace=wrap;html=1;aspect=fixed;" value="CSV&lt;div&gt;檔案&lt;/div&gt;" vertex="1">
+                    <mxGeometry height="80" width="80" x="140" y="600" as="geometry"/>
+                </mxCell>
+                <mxCell id="0VbNO4eZH2wrhs1lxZlZ-4" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;" value="資料庫" vertex="1">
+                    <mxGeometry height="80" width="60" x="200" y="760" as="geometry"/>
+                </mxCell>
+                <mxCell id="0VbNO4eZH2wrhs1lxZlZ-6" edge="1" parent="1" source="0VbNO4eZH2wrhs1lxZlZ-1" style="endArrow=classic;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" target="0VbNO4eZH2wrhs1lxZlZ-2" value="">
+                    <mxGeometry height="50" relative="1" width="50" as="geometry">
+                        <mxPoint x="350" y="630" as="sourcePoint"/>
+                        <mxPoint x="400" y="580" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="0VbNO4eZH2wrhs1lxZlZ-8" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="爬蟲程式&lt;div&gt;Extract&lt;/div&gt;" vertex="1">
+                    <mxGeometry height="30" width="60" x="270" y="380" as="geometry"/>
+                </mxCell>
+                <mxCell id="0VbNO4eZH2wrhs1lxZlZ-9" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="轉換結構&lt;br&gt;Transform" vertex="1">
+                    <mxGeometry height="30" width="60" x="220" y="550" as="geometry"/>
+                </mxCell>
+                <mxCell id="0VbNO4eZH2wrhs1lxZlZ-10" edge="1" parent="1" source="0VbNO4eZH2wrhs1lxZlZ-2" style="endArrow=classic;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="0VbNO4eZH2wrhs1lxZlZ-3" value="">
+                    <mxGeometry height="50" relative="1" width="50" as="geometry">
+                        <mxPoint x="350" y="630" as="sourcePoint"/>
+                        <mxPoint x="400" y="580" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="0VbNO4eZH2wrhs1lxZlZ-11" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="導入邏輯&lt;br&gt;Load" vertex="1">
+                    <mxGeometry height="30" width="60" x="260" y="690" as="geometry"/>
+                </mxCell>
+                <mxCell id="0VbNO4eZH2wrhs1lxZlZ-12" edge="1" parent="1" source="0VbNO4eZH2wrhs1lxZlZ-3" style="endArrow=classic;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.283;entryY=-0.023;entryDx=0;entryDy=0;entryPerimeter=0;" target="0VbNO4eZH2wrhs1lxZlZ-4" value="">
+                    <mxGeometry height="50" relative="1" width="50" as="geometry">
+                        <mxPoint x="350" y="630" as="sourcePoint"/>
+                        <mxPoint x="400" y="580" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
